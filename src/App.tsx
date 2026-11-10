@@ -44,7 +44,7 @@ export default function App() {
   const applyFormula = () => { try { hf.setCellContents({ sheet: 0, row: active.row, col: active.col }, [[formula || null]]); setRevision(x => x + 1); setStatus('Updated'); } catch (e) { setStatus(String(e)); } };
   const importFile = async (file: File) => {
     try {
-      const wb = new ExcelJS.Workbook(); await wb.xlsx.load(await file.arrayBuffer());
+      const wb = new ExcelJS.Workbook(); await wb.xlsx.load((await file.arrayBuffer()) as any);
       const ws = wb.worksheets[0]; if (!ws) throw Error('No worksheet');
       const matrix: (string | number | boolean | null)[][] = Array.from({ length: ROWS }, () => Array(COLS).fill(null));
       ws.eachRow((row, r) => { if (r > ROWS) return; row.eachCell({ includeEmpty: false }, (cell, c) => {
@@ -70,7 +70,7 @@ export default function App() {
   return <main><header><h1>AG Grid + HyperFormula</h1><span>AG Grid 35.2.1 · 1,000 × 26 demo</span></header>
     <div className="toolbar"><label className="upload">Import XLSX<input type="file" accept=".xlsx" hidden onChange={e => { const f = e.target.files?.[0]; if (f) void importFile(f); e.target.value = ''; }}/></label><button onClick={() => void exportFile()}>Export XLSX</button><span className="status">{status}</span></div>
     <div className="formula"><strong>{colName(active.col)}{active.row + 1}</strong><label htmlFor="formula">fx</label><input id="formula" value={formula} onChange={e => setFormula(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') applyFormula(); }}/><button onClick={applyFormula}>Apply</button></div>
-    <div className="sheet"><AgGridReact<Row> ref={grid} rowData={rows} columnDefs={columns} getRowId={p => String(p.data.id)} rowNumbers={true} defaultColDef={{ resizable: true, sortable: false, filter: false }} onCellFocused={focus} onCellValueChanged={(_e: CellValueChangedEvent<Row>) => setStatus('Updated')} /></div>
+    <div className="sheet"><AgGridReact<Row> ref={grid} rowData={rows} columnDefs={columns} getRowId={p => String(p.data.id)} defaultColDef={{ resizable: true, sortable: false, filter: false }} onCellFocused={focus} onCellValueChanged={(_e: CellValueChangedEvent<Row>) => setStatus('Updated')} /></div>
     <footer>Enter formulas such as =SUM(D2:D3), =IF(B2&gt;1, C2*B2, 0). HyperFormula is the only calculation engine.</footer>
   </main>;
 }
