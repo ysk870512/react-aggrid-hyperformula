@@ -398,7 +398,7 @@ export default function App() {
       {formulaEditing && <div className="formula-hint">수식 입력 중 다른 셀을 클릭하면 해당 주소가 삽입됩니다. Enter 확정 · Esc 취소 · Tab 함수 선택</div>}
     </div>
     <div className="sheet"><AgGridReact<RowData> ref={grid} rowData={rowData} columnDefs={columns}
-      getRowId={p => String(p.data.id)} cellSelection={fillSelection} suppressClipboardPaste={true}
+      getRowId={p => String(p.data.id)} cellSelection={fillSelection} suppressClipboardPaste={true} suppressClickEdit={true}
       onFillStart={() => { checkpoint(); fillOrigin.current = selection(); fillInProgress.current = true; }}
       onFillEnd={() => { fillInProgress.current = false; fillOrigin.current = null; update(); setStatus('Mouse fill completed'); }}
       defaultColDef={{ resizable: true, sortable: false, filter: false }}
