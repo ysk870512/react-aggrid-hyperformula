@@ -1,1 +1,9 @@
 *{box-sizing:border-box}body{margin:0;font-family:Inter,system-ui,-apple-system,sans-serif;color:#17243b;background:#f5f7fb}main{padding:24px;max-width:1500px;margin:auto}header{display:flex;justify-content:space-between;align-items:center;gap:20px}h1{font-size:23px;margin:0 0 20px}header span,footer,.status{color:#63718a;font-size:13px}.toolbar,.formula{display:flex;align-items:center;gap:12px;padding:12px;background:#fff;border:1px solid #dce2ed}.toolbar{border-radius:10px 10px 0 0}.formula{border-top:0}.formula strong{min-width:60px}.formula label{font-style:italic;color:#73809a}.formula input{flex:1;min-width:80px;border:1px solid #dce2ed;border-radius:5px;padding:8px;font:inherit}button,.upload{cursor:pointer;background:#244dd5;color:#fff;border:0;border-radius:6px;padding:9px 13px;font:inherit;font-size:13px}.status{margin-left:auto}.sheet{height:650px;background:white}footer{padding-top:12px}
+
+.formula-editor{position:relative;z-index:5}
+.formula-suggestions{position:absolute;left:100px;top:100%;width:min(460px,calc(100% - 110px));max-height:280px;overflow:auto;background:white;border:1px solid #cbd5e1;box-shadow:0 10px 25px #1c2c4a22;border-radius:0 0 9px 9px;display:flex;flex-direction:column}
+.formula-suggestions button{background:white;color:#17243b;text-align:left;border-radius:0;display:flex;justify-content:space-between;padding:9px 14px}
+.formula-suggestions button:hover,.formula-suggestions button.selected{background:#eaf0ff}
+.formula-suggestions small{color:#66758f}
+.formula-hint{background:#edf3ff;color:#3e5274;padding:7px 12px;font-size:12px}
+.formula input:focus{outline:2px solid #4b73ec}
