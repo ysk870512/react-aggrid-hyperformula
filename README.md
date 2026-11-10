@@ -47,7 +47,7 @@ HyperFormula is dual licensed. This demo uses `licenseKey: 'gpl-v3'`; assess GPL
 - Press Enter (with no autocomplete candidate) or Apply to save, Esc or Cancel to discard.
 - Double-clicking a cell opens the persistent formula editor instead of AG Grid's native editor.
 
-The function suggestion list is a curated subset, not yet a complete list of functions available in HyperFormula. Runtime and browser testing is still required.
+Function autocomplete is populated dynamically from `engine.getRegisteredFunctionNames()`, including built-in functions, aliases, and registered custom functions. Suggestions are filtered as you type and show up to 12 matches at a time. On newer HyperFormula releases, available descriptions are displayed using `getAvailableFunctions()`; on older 3.x releases, names remain available without descriptions. This lists functions registered with the engine, not every function in Microsoft Excel. Runtime and browser testing is still required.
 
 ## Troubleshooting
 
