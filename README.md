@@ -38,3 +38,17 @@ Copy `.env.example` to `.env` and set `VITE_AG_GRID_LICENSE_KEY` locally. Never 
 ## License
 
 HyperFormula is dual licensed. This demo uses `licenseKey: 'gpl-v3'`; assess GPLv3 obligations or obtain a commercial license before proprietary distribution or deployment. Your AG Grid Enterprise license is separate.
+
+## Formula editing (new)
+
+- Select a cell and press `=` to enter the persistent formula editor.
+- Type `=SU` to see suggestions such as `SUM` and `SUMIF`; use arrows and Tab or Enter to insert the selected function.
+- After `=SUM(`, click another grid cell to insert its A1 reference without ending formula composition.
+- Press Enter (with no autocomplete candidate) or Apply to save, Esc or Cancel to discard.
+- Double-clicking a cell opens the persistent formula editor instead of AG Grid's native editor.
+
+The function suggestion list is a curated subset, not yet a complete list of functions available in HyperFormula. Runtime and browser testing is still required.
+
+## Troubleshooting
+
+If the app fails to start, run `npm install` and `npm run build`, then share the first error from the terminal or browser console. A previous development-only issue was React StrictMode destroying the stateful HyperFormula engine during effect replay; the bootstrap no longer wraps the app in StrictMode.

@@ -10,6 +10,16 @@ ModuleRegistry.registerModules([AllCommunityModule, AllEnterpriseModule]);
 if (import.meta.env.VITE_AG_GRID_LICENSE_KEY) LicenseManager.setLicenseKey(import.meta.env.VITE_AG_GRID_LICENSE_KEY);
 
 const ROWS = 1000, COLS = 26;
+const FUNCTIONS = [
+  'ABS','AND','AVERAGE','AVERAGEIF','AVERAGEIFS','CEILING','CHOOSE','CONCAT','CONCATENATE',
+  'COUNT','COUNTA','COUNTBLANK','COUNTIF','COUNTIFS','DATE','DAY','DAYS','EOMONTH',
+  'FILTER','FIND','FLOOR','HLOOKUP','HOUR','IF','IFERROR','IFNA','IFS','INDEX',
+  'INT','ISBLANK','ISERROR','ISNUMBER','LEFT','LEN','LOOKUP','LOWER','MATCH','MAX',
+  'MEDIAN','MID','MIN','MOD','MONTH','NOT','NOW','OFFSET','OR','PRODUCT','PROPER',
+  'RAND','RANDBETWEEN','REPLACE','RIGHT','ROUND','ROUNDDOWN','ROUNDUP','SEARCH',
+  'SORT','SQRT','SUBSTITUTE','SUM','SUMIF','SUMIFS','SUMPRODUCT','TEXT','TIME',
+  'TODAY','TRIM','UNIQUE','UPPER','VALUE','VLOOKUP','WEEKDAY','YEAR','XLOOKUP'
+];
 type Value = string | number | boolean | null;
 type Pos = { row: number; col: number };
 type Style = { bold?: boolean; italic?: boolean; color?: string; background?: string; align?: 'left' | 'center' | 'right'; format?: string };
@@ -29,6 +39,12 @@ const rowData: RowData[] = Array.from({ length: ROWS }, (_, id) => ({ id }));
 export default function App() {
   const engine = useMemo(() => HyperFormula.buildFromArray(sample, { licenseKey: 'gpl-v3' }), []);
   const grid = useRef<AgGridReact<RowData>>(null);
+  const formulaInput = useRef<HTMLInputElement>(null);
+  const editingRef = useRef(false);
+  const editCell = useRef<Pos>({ row: 1, col: 0 });
+  const [formulaEditing, setFormulaEditing] = useState(false);
+  const [suggestionIndex, setSuggestionIndex] = useState(0);
+  const [caret, setCaret] = useState(0);
   const styles = useRef(new Map<string, Style>());
   const merges = useRef<Merge[]>([]);
   const undo = useRef<Snapshot[]>([]);
@@ -41,6 +57,61 @@ export default function App() {
   const [revision, setRevision] = useState(0);
   const [status, setStatus] = useState('Ready');
   const [styleRevision, setStyleRevision] = useState(0);
+  const candidates = useMemo(() => {
+    if (!formulaEditing || !formula.startsWith('=')) return [];
+    const before = formula.slice(0, caret);
+    const match = before.match(/(?:^|[^A-Za-z0-9_.])([A-Za-z][A-Za-z0-9_.]*)$/);
+    if (!match) return [];
+    const fragment = match[1].toUpperCase();
+    return FUNCTIONS.filter(fn => fn.startsWith(fragment) && fn !== fragment).slice(0, 8);
+  }, [formula, formulaEditing, caret]);
+  const startFormula = useCallback((text: string, cell: Pos) => {
+    editCell.current = cell;
+    editingRef.current = true;
+    setFormulaEditing(true);
+    setFormula(text);
+    setCaret(text.length);
+    setSuggestionIndex(0);
+    grid.current?.api.stopEditing(true);
+    requestAnimationFrame(() => {
+      formulaInput.current?.focus();
+      formulaInput.current?.setSelectionRange(text.length, text.length);
+    });
+  }, []);
+  const stopFormula = useCallback(() => {
+    editingRef.current = false;
+    setFormulaEditing(false);
+  }, []);
+  const acceptSuggestion = useCallback((functionName: string) => {
+    const input = formulaInput.current;
+    const at = input?.selectionStart ?? caret;
+    const before = formula.slice(0, at);
+    const match = before.match(/([A-Za-z][A-Za-z0-9_.]*)$/);
+    if (!match) return;
+    const next = before.slice(0, -match[1].length) + functionName + '(' + formula.slice(at);
+    const cursor = at - match[1].length + functionName.length + 1;
+    setFormula(next);
+    setCaret(cursor);
+    setSuggestionIndex(0);
+    requestAnimationFrame(() => {
+      input?.focus();
+      input?.setSelectionRange(cursor, cursor);
+    });
+  }, [formula, caret]);
+  const insertReference = useCallback((pos: Pos) => {
+    const input = formulaInput.current;
+    const at = input?.selectionStart ?? formula.length;
+    const end = input?.selectionEnd ?? at;
+    const reference = name(pos.col) + String(pos.row + 1);
+    // Clicking a cell while composing a formula inserts a reference, without changing the edited cell.
+    const next = formula.slice(0, at) + reference + formula.slice(end);
+    setFormula(next);
+    setCaret(at + reference.length);
+    requestAnimationFrame(() => {
+      input?.focus();
+      input?.setSelectionRange(at + reference.length, at + reference.length);
+    });
+  }, [formula]);
 
   const raw = useCallback((row: number, col: number): Value => {
     const address = { sheet: 0, row, col };
@@ -193,10 +264,22 @@ export default function App() {
       return m?.width ?? 1;
     }
   })), [engine, checkpoint, setCell, update, styleRevision]);
-  useEffect(() => { setFormula(String(raw(active.row, active.col) ?? '')); }, [active, revision, raw]);
+  useEffect(() => { if (!editingRef.current) setFormula(String(raw(active.row, active.col) ?? '')); }, [active, revision, raw]);
   useEffect(() => { grid.current?.api.refreshCells({ force: true }); }, [revision, styleRevision]);
   useEffect(() => () => engine.destroy(), [engine]);
-  const applyFormula = () => { try { checkpoint(); setCell(active.row, active.col, formula || null); update(); } catch (e) { setStatus(String(e)); } };
+  const applyFormula = () => {
+    try {
+      const cell = editingRef.current ? editCell.current : active;
+      checkpoint(); setCell(cell.row, cell.col, formula || null); stopFormula(); update();
+      setStatus('Formula saved to ' + name(cell.col) + String(cell.row + 1));
+      grid.current?.api.setFocusedCell(cell.row, String(cell.col));
+    } catch (e) { setStatus(String(e)); }
+  };
+  const cancelFormula = () => {
+    stopFormula();
+    setFormula(String(raw(editCell.current.row, editCell.current.col) ?? ''));
+    setStatus('Formula edit cancelled');
+  };
   const importFile = async (file: File) => {
     try {
       const wb = new ExcelJS.Workbook(); await wb.xlsx.load((await file.arrayBuffer()) as any);
@@ -247,6 +330,14 @@ export default function App() {
     } catch (e) { setStatus('Export failed: ' + String(e)); }
   };
   const onKeyboard = (e: KeyboardEvent) => {
+    if (e.key === '=' && !e.ctrlKey && !e.metaKey && !e.altKey &&
+        !(e.target instanceof HTMLInputElement) && !(e.target instanceof HTMLTextAreaElement)) {
+      const el = e.target;
+      if (el instanceof HTMLElement && el.closest('.sheet')) {
+        e.preventDefault(); e.stopImmediatePropagation();
+        startFormula('=', active); return;
+      }
+    }
     if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
     if (!(e.ctrlKey || e.metaKey)) return;
     const k = e.key.toLowerCase();
@@ -279,15 +370,49 @@ export default function App() {
       <button onClick={merge}>Merge / Unmerge</button>
       <span className="status">{status}</span>
     </div>
-    <div className="formula"><strong>{name(active.col)}{active.row + 1}</strong><label htmlFor="formula">fx</label>
-      <input id="formula" value={formula} onChange={e => setFormula(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') applyFormula(); }} />
-      <button onClick={applyFormula}>Apply</button></div>
+    <div className="formula-editor">
+      <div className="formula"><strong>{name(formulaEditing ? editCell.current.col : active.col)}{(formulaEditing ? editCell.current.row : active.row) + 1}</strong><label htmlFor="formula">fx</label>
+        <input id="formula" ref={formulaInput} value={formula}
+          aria-label="Formula editor"
+          onFocus={() => { if (!editingRef.current) startFormula(formula, active); }}
+          onChange={e => { setFormula(e.target.value); setCaret(e.target.selectionStart ?? e.target.value.length); setSuggestionIndex(0); }}
+          onClick={e => setCaret(e.currentTarget.selectionStart ?? formula.length)}
+          onKeyUp={e => { if (!['ArrowDown','ArrowUp','Enter','Escape'].includes(e.key)) setCaret(e.currentTarget.selectionStart ?? formula.length); }}
+          onKeyDown={e => {
+            if (e.key === 'Escape') { e.preventDefault(); cancelFormula(); }
+            else if (e.key === 'ArrowDown' && candidates.length) { e.preventDefault(); setSuggestionIndex(i => (i + 1) % candidates.length); }
+            else if (e.key === 'ArrowUp' && candidates.length) { e.preventDefault(); setSuggestionIndex(i => (i - 1 + candidates.length) % candidates.length); }
+            else if (e.key === 'Tab' && candidates.length) { e.preventDefault(); acceptSuggestion(candidates[suggestionIndex % candidates.length]); }
+            else if (e.key === 'Enter') { e.preventDefault(); if (candidates.length) acceptSuggestion(candidates[suggestionIndex % candidates.length]); else applyFormula(); }
+          }} />
+        <button onClick={applyFormula}>Apply</button>
+        {formulaEditing && <button onClick={cancelFormula}>Cancel</button>}
+      </div>
+      {formulaEditing && candidates.length > 0 && <div className="formula-suggestions" role="listbox" aria-label="Formula functions">
+        {candidates.map((fn, i) => <button key={fn} type="button" role="option" aria-selected={i === suggestionIndex}
+          className={i === suggestionIndex ? 'selected' : ''}
+          onMouseDown={e => e.preventDefault()} onClick={() => acceptSuggestion(fn)}>
+          <strong>{fn}</strong><small>{fn}(…)</small>
+        </button>)}
+      </div>}
+      {formulaEditing && <div className="formula-hint">수식 입력 중 다른 셀을 클릭하면 해당 주소가 삽입됩니다. Enter 확정 · Esc 취소 · Tab 함수 선택</div>}
+    </div>
     <div className="sheet"><AgGridReact<RowData> ref={grid} rowData={rowData} columnDefs={columns}
-      getRowId={p => String(p.data.id)} cellSelection={fillSelection} suppressClipboardPaste={true}
+      getRowId={p => String(p.data.id)} cellSelection={fillSelection} suppressClipboardPaste={true} suppressClickEdit={true}
       onFillStart={() => { checkpoint(); fillOrigin.current = selection(); fillInProgress.current = true; }}
       onFillEnd={() => { fillInProgress.current = false; fillOrigin.current = null; update(); setStatus('Mouse fill completed'); }}
       defaultColDef={{ resizable: true, sortable: false, filter: false }}
-      onCellFocused={e => { if (e.rowIndex === null || !e.column) return; const node = e.api.getDisplayedRowAtIndex(e.rowIndex); if (node?.data) setActive({ row: node.data.id, col: Number(e.column.getColId()) }); }} /></div>
+      onCellClicked={e => {
+        if (!editingRef.current || !e.data) return;
+        const pos = { row: e.data.id, col: Number(e.column.getColId()) };
+        if (pos.row !== editCell.current.row || pos.col !== editCell.current.col) insertReference(pos);
+      }}
+      onCellDoubleClicked={e => {
+        if (!e.data) return;
+        const pos = { row: e.data.id, col: Number(e.column.getColId()) };
+        startFormula(String(raw(pos.row, pos.col) ?? ''), pos);
+      }}
+      onCellFocused={e => { if (editingRef.current) return; if (e.rowIndex === null || !e.column) return; const node = e.api.getDisplayedRowAtIndex(e.rowIndex); if (node?.data) setActive({ row: node.data.id, col: Number(e.column.getColId()) }); }} /></div>
     <footer>Ctrl/Cmd+C/V copy and paste; Ctrl/Cmd+D/R fill down/right; Ctrl/Cmd+Z/Y undo/redo. Select a rectangular range first. Note: merged rows are exported to XLSX, but vertical merging is not fully represented in AG Grid.</footer>
   </main>;
 }
