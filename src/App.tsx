@@ -10,16 +10,7 @@ ModuleRegistry.registerModules([AllCommunityModule, AllEnterpriseModule]);
 if (import.meta.env.VITE_AG_GRID_LICENSE_KEY) LicenseManager.setLicenseKey(import.meta.env.VITE_AG_GRID_LICENSE_KEY);
 
 const ROWS = 1000, COLS = 26;
-const FUNCTIONS = [
-  'ABS','AND','AVERAGE','AVERAGEIF','AVERAGEIFS','CEILING','CHOOSE','CONCAT','CONCATENATE',
-  'COUNT','COUNTA','COUNTBLANK','COUNTIF','COUNTIFS','DATE','DAY','DAYS','EOMONTH',
-  'FILTER','FIND','FLOOR','HLOOKUP','HOUR','IF','IFERROR','IFNA','IFS','INDEX',
-  'INT','ISBLANK','ISERROR','ISNUMBER','LEFT','LEN','LOOKUP','LOWER','MATCH','MAX',
-  'MEDIAN','MID','MIN','MOD','MONTH','NOT','NOW','OFFSET','OR','PRODUCT','PROPER',
-  'RAND','RANDBETWEEN','REPLACE','RIGHT','ROUND','ROUNDDOWN','ROUNDUP','SEARCH',
-  'SORT','SQRT','SUBSTITUTE','SUM','SUMIF','SUMIFS','SUMPRODUCT','TEXT','TIME',
-  'TODAY','TRIM','UNIQUE','UPPER','VALUE','VLOOKUP','WEEKDAY','YEAR','XLOOKUP'
-];
+
 type Value = string | number | boolean | null;
 type Pos = { row: number; col: number };
 type Style = { bold?: boolean; italic?: boolean; color?: string; background?: string; align?: 'left' | 'center' | 'right'; format?: string };
@@ -57,14 +48,34 @@ export default function App() {
   const [revision, setRevision] = useState(0);
   const [status, setStatus] = useState('Ready');
   const [styleRevision, setStyleRevision] = useState(0);
+  // The engine is the source of truth: include built-ins, aliases and registered custom functions.
+  // Older HyperFormula 3.x versions expose getRegisteredFunctionNames, while newer
+  // releases can also provide descriptions through getAvailableFunctions.
+  const functionCatalog = useMemo(() => {
+    const names = engine.getRegisteredFunctionNames();
+    const metadataEngine = engine as typeof engine & {
+      getAvailableFunctions?: () => Array<{
+        name: string; canonicalName: string; category?: string; shortDescription?: string;
+      }>;
+    };
+    const descriptions = new Map<string, string>();
+    if (typeof metadataEngine.getAvailableFunctions === 'function') {
+      for (const item of metadataEngine.getAvailableFunctions()) {
+        descriptions.set(item.name.toUpperCase(), item.shortDescription ?? item.category ?? '');
+      }
+    }
+    return [...new Set(names.map(fn => fn.toUpperCase()))]
+      .sort((a, b) => a.localeCompare(b))
+      .map(fn => ({ name: fn, description: descriptions.get(fn) ?? '' }));
+  }, [engine]);
   const candidates = useMemo(() => {
     if (!formulaEditing || !formula.startsWith('=')) return [];
     const before = formula.slice(0, caret);
     const match = before.match(/(?:^|[^A-Za-z0-9_.])([A-Za-z][A-Za-z0-9_.]*)$/);
     if (!match) return [];
     const fragment = match[1].toUpperCase();
-    return FUNCTIONS.filter(fn => fn.startsWith(fragment) && fn !== fragment).slice(0, 8);
-  }, [formula, formulaEditing, caret]);
+    return functionCatalog.filter(fn => fn.name.startsWith(fragment) && fn.name !== fragment).slice(0, 12);
+  }, [formula, formulaEditing, caret, functionCatalog]);
   const startFormula = useCallback((text: string, cell: Pos) => {
     editCell.current = cell;
     editingRef.current = true;
@@ -382,17 +393,17 @@ export default function App() {
             if (e.key === 'Escape') { e.preventDefault(); cancelFormula(); }
             else if (e.key === 'ArrowDown' && candidates.length) { e.preventDefault(); setSuggestionIndex(i => (i + 1) % candidates.length); }
             else if (e.key === 'ArrowUp' && candidates.length) { e.preventDefault(); setSuggestionIndex(i => (i - 1 + candidates.length) % candidates.length); }
-            else if (e.key === 'Tab' && candidates.length) { e.preventDefault(); acceptSuggestion(candidates[suggestionIndex % candidates.length]); }
-            else if (e.key === 'Enter') { e.preventDefault(); if (candidates.length) acceptSuggestion(candidates[suggestionIndex % candidates.length]); else applyFormula(); }
+            else if (e.key === 'Tab' && candidates.length) { e.preventDefault(); acceptSuggestion(candidates[suggestionIndex % candidates.length].name); }
+            else if (e.key === 'Enter') { e.preventDefault(); if (candidates.length) acceptSuggestion(candidates[suggestionIndex % candidates.length].name); else applyFormula(); }
           }} />
         <button onClick={applyFormula}>Apply</button>
         {formulaEditing && <button onClick={cancelFormula}>Cancel</button>}
       </div>
       {formulaEditing && candidates.length > 0 && <div className="formula-suggestions" role="listbox" aria-label="Formula functions">
-        {candidates.map((fn, i) => <button key={fn} type="button" role="option" aria-selected={i === suggestionIndex}
+        {candidates.map((fn, i) => <button key={fn.name} type="button" role="option" aria-selected={i === suggestionIndex}
           className={i === suggestionIndex ? 'selected' : ''}
-          onMouseDown={e => e.preventDefault()} onClick={() => acceptSuggestion(fn)}>
-          <strong>{fn}</strong><small>{fn}(…)</small>
+          onMouseDown={e => e.preventDefault()} onClick={() => acceptSuggestion(fn.name)}>
+          <strong>{fn.name}</strong><small>{fn.description || fn.name + '(…)'}</small>
         </button>)}
       </div>}
       {formulaEditing && <div className="formula-hint">수식 입력 중 다른 셀을 클릭하면 해당 주소가 삽입됩니다. Enter 확정 · Esc 취소 · Tab 함수 선택</div>}
