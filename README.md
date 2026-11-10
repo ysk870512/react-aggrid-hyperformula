@@ -18,7 +18,7 @@ Copy `.env.example` to `.env` and set `VITE_AG_GRID_LICENSE_KEY` locally. Never 
 - HyperFormula calculation, formula bar and dependent recalculation
 - Rectangular cell range selection
 - Ctrl/Cmd+C/V and toolbar Copy/Paste, including relative and absolute A1 reference shifting for internal copies
-- Ctrl/Cmd+D/R or toolbar Fill Down/Right across a selected range
+- Mouse drag fill handle (bottom-right of selection) with formula reference shifting; Ctrl/Cmd+D/R or toolbar Fill Down/Right
 - Undo/redo (Ctrl/Cmd+Z/Y) for supported operations
 - Bold, italic, text/background colors, horizontal alignment
 - Horizontal cell merging in the grid, merge metadata on XLSX export
@@ -28,7 +28,7 @@ Copy `.env.example` to `.env` and set `VITE_AG_GRID_LICENSE_KEY` locally. Never 
 
 - The custom formula-reference shifter is not a full Excel formula parser. Named ranges, structured references, external workbooks, spill formulas, locale syntax, and some quoted sheet references need more work.
 - Vertical merged regions are **not visually merged** in AG Grid; XLSX export includes the merge region. Imported merges are not yet restored.
-- Dragging the fill handle is not wired to HyperFormula. Use **Fill Down / Fill Right** toolbar or Ctrl/Cmd+D/R.
+- Drag fill is wired to HyperFormula through AG Grid's fill handle, but needs browser verification; complex Excel formulas and edge cases may not shift correctly.
 - Copy/paste of cell formatting, repeated paste over a larger destination, and cross-workbook formula shifting are incomplete.
 - Undo history is limited to 15 snapshots; imports and large edits may be memory-intensive.
 - Import reads only the first worksheet and at most 1,000 rows × 26 columns; some Excel cell types and formatting are not preserved.
