@@ -33,6 +33,8 @@ export default function App() {
   const merges = useRef<Merge[]>([]);
   const undo = useRef<Snapshot[]>([]);
   const redo = useRef<Snapshot[]>([]);
+  const fillInProgress = useRef(false);
+  const fillOrigin = useRef<{top:number;bottom:number;left:number;right:number} | null>(null);
   const internalClipboard = useRef<{ origin: Pos; data: Value[][] } | null>(null);
   const [active, setActive] = useState<Pos>({ row: 1, col: 0 });
   const [formula, setFormula] = useState('');
@@ -145,6 +147,28 @@ export default function App() {
     }
     update();
   }, [selection, active, checkpoint, setCell, update]);
+  const fillSelection = useMemo(() => ({ handle: {
+    mode: 'fill' as const,
+    direction: 'xy' as const,
+    suppressClearOnFillReduction: true,
+    setFillValue: (p: { rowNode: { data?: RowData }; column: { getColId(): string }; direction: 'up' | 'down' | 'left' | 'right'; useValue(value: Value): unknown; useDefault(): unknown; skipCell(): unknown }) => {
+      const original = fillOrigin.current;
+      const row = p.rowNode.data?.id;
+      const col = Number(p.column.getColId());
+      if (!original || row === undefined || !Number.isFinite(col)) return p.useDefault();
+      const height = original.bottom - original.top + 1;
+      const width = original.right - original.left + 1;
+      const wrap = (value: number, count: number) => ((value % count) + count) % count;
+      const sourceRow = original.top + wrap(row - original.top, height);
+      const sourceCol = original.left + wrap(col - original.left, width);
+      const source = raw(sourceRow, sourceCol);
+      if (typeof source === 'string' && source.startsWith('=')) {
+        return p.useValue(shiftFormula(source, row - sourceRow, col - sourceCol));
+      }
+      // Preserve AG Grid's built-in numeric series generation.
+      return p.useDefault();
+    }
+  } }), [raw]);
   const columns = useMemo<ColDef<RowData>[]>(() => Array.from({ length: COLS }, (_, c) => ({
     colId: String(c), headerName: name(c), width: 128, editable: true,
     valueGetter: p => {
@@ -154,7 +178,7 @@ export default function App() {
     },
     valueSetter: p => {
       if (!p.data) return false;
-      try { checkpoint(); setCell(p.data.id, c, p.newValue ?? null); update(); return true; }
+      try { if (!fillInProgress.current) checkpoint(); setCell(p.data.id, c, p.newValue ?? null); if (!fillInProgress.current) update(); return true; }
       catch (e) { setStatus(String(e)); return false; }
     },
     cellStyle: p => {
@@ -259,7 +283,9 @@ export default function App() {
       <input id="formula" value={formula} onChange={e => setFormula(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') applyFormula(); }} />
       <button onClick={applyFormula}>Apply</button></div>
     <div className="sheet"><AgGridReact<RowData> ref={grid} rowData={rowData} columnDefs={columns}
-      getRowId={p => String(p.data.id)} cellSelection={true} suppressClipboardPaste={true}
+      getRowId={p => String(p.data.id)} cellSelection={fillSelection} suppressClipboardPaste={true}
+      onFillStart={() => { checkpoint(); fillOrigin.current = selection(); fillInProgress.current = true; }}
+      onFillEnd={() => { fillInProgress.current = false; fillOrigin.current = null; update(); setStatus('Mouse fill completed'); }}
       defaultColDef={{ resizable: true, sortable: false, filter: false }}
       onCellFocused={e => { if (e.rowIndex === null || !e.column) return; const node = e.api.getDisplayedRowAtIndex(e.rowIndex); if (node?.data) setActive({ row: node.data.id, col: Number(e.column.getColId()) }); }} /></div>
     <footer>Ctrl/Cmd+C/V copy and paste; Ctrl/Cmd+D/R fill down/right; Ctrl/Cmd+Z/Y undo/redo. Select a rectangular range first. Note: merged rows are exported to XLSX, but vertical merging is not fully represented in AG Grid.</footer>
