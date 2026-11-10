@@ -394,13 +394,13 @@ export default function App() {
             else if (e.key === 'ArrowDown' && candidates.length) { e.preventDefault(); setSuggestionIndex(i => (i + 1) % candidates.length); }
             else if (e.key === 'ArrowUp' && candidates.length) { e.preventDefault(); setSuggestionIndex(i => (i - 1 + candidates.length) % candidates.length); }
             else if (e.key === 'Tab' && candidates.length) { e.preventDefault(); acceptSuggestion(candidates[suggestionIndex % candidates.length].name); }
-            else if (e.key === 'Enter') { e.preventDefault(); if (candidates.length) acceptSuggestion(candidates[suggestionIndex % candidates.length]); else applyFormula(); }
+            else if (e.key === 'Enter') { e.preventDefault(); if (candidates.length) acceptSuggestion(candidates[suggestionIndex % candidates.length].name); else applyFormula(); }
           }} />
         <button onClick={applyFormula}>Apply</button>
         {formulaEditing && <button onClick={cancelFormula}>Cancel</button>}
       </div>
       {formulaEditing && candidates.length > 0 && <div className="formula-suggestions" role="listbox" aria-label="Formula functions">
-        {candidates.map((fn, i) => <button key={fn} type="button" role="option" aria-selected={i === suggestionIndex}
+        {candidates.map((fn, i) => <button key={fn.name} type="button" role="option" aria-selected={i === suggestionIndex}
           className={i === suggestionIndex ? 'selected' : ''}
           onMouseDown={e => e.preventDefault()} onClick={() => acceptSuggestion(fn.name)}>
           <strong>{fn.name}</strong><small>{fn.description || fn.name + '(…)'}</small>
